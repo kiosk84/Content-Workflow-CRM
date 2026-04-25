@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import OpenAI from "openai";
-import { buildSystemPrompt } from "@/lib/prompts";
+import { buildSystemPrompt, type Persona } from "@/lib/prompts";
+import type { SourceSnapshot } from "@/types/content";
 import {
   resolveProvider,
   type AIProvider,
@@ -17,20 +18,25 @@ interface ChatPayload {
     idea_text: string;
     script_text: string;
     platform: string[];
+    source_snapshot?: SourceSnapshot;
   };
-  settings?: Partial<ProviderSettings>;
+  settings?: Partial<ProviderSettings> & { ai_persona?: Persona };
 }
 
 export async function POST(req: NextRequest) {
   const body = (await req.json()) as ChatPayload;
 
-  const system = buildSystemPrompt({
-    title: body.card.title,
-    idea_text: body.card.idea_text,
-    script_text: body.card.script_text,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    platform: body.card.platform as any,
-  });
+  const system = buildSystemPrompt(
+    {
+      title: body.card.title,
+      idea_text: body.card.idea_text,
+      script_text: body.card.script_text,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      platform: body.card.platform as any,
+      source_snapshot: body.card.source_snapshot,
+    },
+    body.settings?.ai_persona ?? "universal"
+  );
 
   const resolved = resolveProvider(body.settings);
 

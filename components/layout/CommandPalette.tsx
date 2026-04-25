@@ -1,7 +1,7 @@
 "use client";
 
 import { Command } from "cmdk";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   Plus,
   Youtube,
@@ -11,11 +11,13 @@ import {
   Settings,
   Search,
   Sparkles,
+  Link2,
 } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { PLATFORMS, STAGES } from "@/types/content";
 import type { Platform } from "@/types/content";
 import { cn } from "@/lib/utils";
+import { createCardFromUrl, isUrl } from "@/lib/import-client";
 
 interface Props {
   onOpenSettings: () => void;
@@ -31,10 +33,15 @@ export function CommandPalette({ onOpenSettings }: Props) {
   const setAIOpen = useStore((s) => s.setAIOpen);
 
   const cardItems = useMemo(() => cards.slice(0, 30), [cards]);
+  const [query, setQuery] = useState("");
+  const queryIsUrl = isUrl(query);
 
   if (!open) return null;
 
-  const close = () => setOpen(false);
+  const close = () => {
+    setOpen(false);
+    setQuery("");
+  };
 
   const iconFor = (id: Platform) =>
     id === "youtube"
@@ -62,7 +69,9 @@ export function CommandPalette({ onOpenSettings }: Props) {
             <Search size={14} className="text-muted-foreground" />
             <Command.Input
               autoFocus
-              placeholder="Поиск карточек, действий, фильтров…"
+              value={query}
+              onValueChange={setQuery}
+              placeholder="Поиск, действие или вставь URL…"
               className="flex-1 bg-transparent outline-none placeholder:text-muted-foreground/70"
             />
             <kbd className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
@@ -73,6 +82,20 @@ export function CommandPalette({ onOpenSettings }: Props) {
             <Command.Empty className="px-3 py-6 text-center text-xs text-muted-foreground">
               Ничего не найдено
             </Command.Empty>
+
+            {queryIsUrl && (
+              <Command.Group heading="Импорт по ссылке">
+                <Item
+                  icon={<Link2 size={13} />}
+                  label={`Создать карточку из ${shortHost(query)}`}
+                  sublabel="AI автоматически проанализирует источник"
+                  onSelect={() => {
+                    void createCardFromUrl(query);
+                    close();
+                  }}
+                />
+              </Command.Group>
+            )}
 
             <Command.Group heading="Действия">
               <Item
@@ -150,6 +173,14 @@ export function CommandPalette({ onOpenSettings }: Props) {
       </div>
     </>
   );
+}
+
+function shortHost(u: string) {
+  try {
+    return new URL(u).hostname.replace(/^www\./, "");
+  } catch {
+    return "ссылки";
+  }
 }
 
 function Item({

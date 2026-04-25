@@ -8,6 +8,7 @@ import { PLATFORMS, PRIORITIES, STAGES } from "@/types/content";
 import type { Platform, Priority, Stage } from "@/types/content";
 import { ScriptEditor } from "./ScriptEditor";
 import { PublishBar } from "./PublishBar";
+import { SourceBlock } from "./SourceBlock";
 import { AIChatPanel } from "@/components/ai/AIChatPanel";
 import { cn, relativeTime } from "@/lib/utils";
 
@@ -34,6 +35,7 @@ export function CardPanel({ onOpenSettings }: CardPanelProps = {}) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const editorRef = useRef<Editor | null>(null);
   const [savedAt, setSavedAt] = useState<string | null>(null);
+  const [pendingAIPrompt, setPendingAIPrompt] = useState<string | null>(null);
 
   useEffect(() => {
     setLocal(card);
@@ -228,6 +230,19 @@ export function CardPanel({ onOpenSettings }: CardPanelProps = {}) {
               />
             </div>
 
+            {/* Source (URL import) */}
+            <div className="mt-4 px-5">
+              <SourceBlock
+                card={card}
+                onRemix={() => {
+                  setAIOpen(true);
+                  setPendingAIPrompt(
+                    "Используя ИСТОЧНИК в контексте, сделай полноценный ремикс: новый заголовок, хук, структура сценария и финальный текст — под платформы карточки и мою целевую аудиторию. Не копируй дословно."
+                  );
+                }}
+              />
+            </div>
+
             {/* Publish bar */}
             <div className="mt-4 px-5">
               <PublishBar card={card} onOpenSettings={onOpenSettings} />
@@ -318,7 +333,12 @@ export function CardPanel({ onOpenSettings }: CardPanelProps = {}) {
           {/* Right: AI chat panel */}
           {aiOpen && (
             <div className="hidden w-[420px] shrink-0 border-l border-border bg-background/60 md:flex md:flex-col">
-              <AIChatPanel card={local} onApplyToScript={applyScript} />
+              <AIChatPanel
+                card={local}
+                onApplyToScript={applyScript}
+                pendingPrompt={pendingAIPrompt}
+                onPendingHandled={() => setPendingAIPrompt(null)}
+              />
             </div>
           )}
         </div>

@@ -19,6 +19,21 @@ export interface PublishRecord {
   error?: string;
 }
 
+export interface SourceSnapshot {
+  url: string;
+  fetched_at: string;
+  site?: string;
+  kind: "youtube" | "article" | "social" | "page";
+  title?: string;
+  description?: string;
+  text?: string;
+  author?: string;
+  image?: string;
+  duration?: string;
+  published_at?: string;
+  language?: string;
+}
+
 export interface ContentCard {
   id: string;
   title: string;
@@ -31,6 +46,8 @@ export interface ContentCard {
   tags: string[];
   attachments: Attachment[];
   publish_status?: Partial<Record<Platform, PublishRecord>>;
+  source_url?: string;
+  source_snapshot?: SourceSnapshot;
   created_at: string;
   updated_at: string;
 }

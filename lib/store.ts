@@ -5,11 +5,13 @@ import type {
   ContentCard,
   Platform,
   PublishRecord,
+  SourceSnapshot,
   Stage,
 } from "@/types/content";
 import { SEED_CARDS } from "./seed";
 import { uid } from "./utils";
 import { PROVIDER_DEFAULTS, type AIProvider } from "./ai-providers";
+import type { Persona } from "./prompts";
 
 export interface Settings {
   n8n_webhook_url: string;
@@ -19,6 +21,7 @@ export interface Settings {
   ai_base_url: string;
   ai_model: string;
   ai_api_key: string;
+  ai_persona: Persona;
 }
 
 const DEFAULT_SETTINGS: Settings = {
@@ -29,6 +32,7 @@ const DEFAULT_SETTINGS: Settings = {
   ai_base_url: "",
   ai_model: PROVIDER_DEFAULTS.openai.model,
   ai_api_key: "",
+  ai_persona: "universal",
 };
 
 interface State {
@@ -63,6 +67,7 @@ interface Actions {
     platform: Platform,
     record: PublishRecord
   ) => void;
+  setCardSource: (id: string, snapshot: SourceSnapshot) => void;
   markHydrated: () => void;
 }
 
@@ -94,6 +99,8 @@ export const useStore = create<State & Actions>()(
           tags: partial.tags ?? [],
           attachments: partial.attachments ?? [],
           publish_status: partial.publish_status,
+          source_url: partial.source_url,
+          source_snapshot: partial.source_snapshot,
           created_at: now,
           updated_at: now,
         };
@@ -166,11 +173,24 @@ export const useStore = create<State & Actions>()(
               : c
           ),
         }),
+      setCardSource: (id, snapshot) =>
+        set({
+          cards: get().cards.map((c) =>
+            c.id === id
+              ? {
+                  ...c,
+                  source_url: snapshot.url,
+                  source_snapshot: snapshot,
+                  updated_at: new Date().toISOString(),
+                }
+              : c
+          ),
+        }),
       markHydrated: () => set({ hydrated: true }),
     }),
     {
       name: "contentflow-store",
-      version: 2,
+      version: 3,
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
         cards: state.cards,
@@ -179,8 +199,8 @@ export const useStore = create<State & Actions>()(
       }),
       migrate: (persisted, version) => {
         const p = (persisted ?? {}) as Record<string, unknown>;
+        const s = (p.settings ?? {}) as Record<string, unknown>;
         if (version < 2) {
-          const s = (p.settings ?? {}) as Record<string, unknown>;
           const openai_model =
             typeof s.openai_model === "string" ? s.openai_model : undefined;
           p.settings = {
@@ -191,6 +211,15 @@ export const useStore = create<State & Actions>()(
               (s.ai_model as string) ??
               openai_model ??
               DEFAULT_SETTINGS.ai_model,
+          };
+        }
+        if (version < 3) {
+          p.settings = {
+            ...DEFAULT_SETTINGS,
+            ...((p.settings as object) ?? {}),
+            ai_persona:
+              ((p.settings as Record<string, unknown>)?.ai_persona as Persona) ??
+              "universal",
           };
         }
         return p as unknown as State & Actions;

@@ -29,11 +29,27 @@
 - 🏷 Теги, платформы, дедлайн, приоритет, вложения
 
 ### AI-ассистент (в боковой панели)
-- Видит заголовок, идею, платформы и текущий сценарий
-- Быстрые промпт-чипы: «Хук», «Структура», «Reels 60 сек», «Разверни идею», «Сократи»
+- Видит заголовок, идею, платформы, текущий сценарий и (если добавлен) **источник-ссылку**
+- Быстрые промпт-чипы: «Хук», «Структура», «Reels 60 сек», «Разверни», «Сократи»,
+  **«SEO-заголовок + описание»**, **«Топ-20 хештегов»**, **«Рекомендуй платформы»**,
+  **«3 варианта CTA»**, **«Анализ хука»**, **«Ремикс из источника»**
 - Стриминг ответов, «Применить к сценарию» одной кнопкой
 - **Любой провайдер**: OpenAI / Ollama / LM Studio — переключается в Настройках на лету
 - Кнопка «Подгрузить» сама подтянет список моделей провайдера
+- **Persona-режимы**: универсальный / маркетолог / SEO-редактор / сценарист / продюсер —
+  меняют стиль советов (воронки, SEO, драматургия или контент-план)
+- **Алгоритмы соцсетей в системном промпте**: IG тянется на saves+shares,
+  YouTube Shorts — на retention, Threads — discourse, VK — репосты/сохранения.
+  AI советует под реальные метрики площадки, а не «в воздух».
+
+### Импорт и ремикс по ссылке (NEW)
+- Вставь URL поста / видео / статьи в поле быстрого добавления или в ⌘K-палитру
+- Сервер тянет страницу, парсит OG-теги и читаемый текст, определяет тип
+  (YouTube / соцсеть / статья)
+- Карточка создаётся со снапшотом источника — AI сразу видит контекст в системном промпте
+- Кнопка **«Переработать в новый пост»** в панели карточки отправит AI запрос
+  на полноценный ремикс (новый хук, структура, текст под твои платформы, без дословного
+  копирования)
 
 ### Авто-публикация через n8n
 - Статус карточки «📤 Готово к публикации» → триггер в n8n webhook
@@ -160,22 +176,65 @@ OPENAI_MODEL=gpt-4o-mini
 
 ## 📡 Подключаем авто-публикацию через n8n
 
-### 1. Создай webhook в n8n
+**n8n** — бесплатный open-source workflow-автоматизатор (типа Zapier, только self-hosted и
+полностью контролируемый). ContentFlow отправляет payload в твой n8n-воркфлоу, а n8n уже
+сам раскидывает контент по соцсетям через их API.
 
-- **n8n → New workflow → Webhook node**
-- Method: `POST`, Path: например `contentflow`
-- Response: «When last node finishes» (или Immediately — на твой вкус)
-- Активируй workflow и скопируй Production URL, например:
-  `https://n8n.example.com/webhook/contentflow`
+> **Важно:** ContentFlow **не** публикует в соцсети напрямую — мы форвардим готовый
+> payload в n8n, а n8n делает фактические API-вызовы (Meta Graph, YouTube Data API, VK API).
+> Это нужно, чтобы ты **не хранил токены соцсетей в этом проекте** и мог менять каналы
+> публикации без правок кода.
 
-### 2. Подключи в ContentFlow
+### 1. Поднимаем n8n локально (Docker, 2 команды)
+
+Самый быстрый способ — через Docker:
+
+```bash
+# 1) создать volume, чтобы workflow'ы не пропали
+docker volume create n8n_data
+
+# 2) запустить n8n
+docker run -d --name n8n \
+  -p 5678:5678 \
+  -v n8n_data:/home/node/.n8n \
+  -e N8N_SECURE_COOKIE=false \
+  -e N8N_HOST=localhost \
+  -e WEBHOOK_URL=http://localhost:5678/ \
+  n8nio/n8n
+```
+
+Открой http://localhost:5678, создай owner-аккаунт — всё, n8n готов.
+
+> Альтернатива без Docker: `npx n8n` (потребуется Node 20+).
+
+### 2. Создаём webhook-воркфлоу в n8n
+
+1. В n8n: **Workflows → New**.
+2. Добавь ноду **Webhook** (поиск: `webhook`):
+   - HTTP Method: `POST`
+   - Path: `contentflow` (можно любое)
+   - Respond: `When last node finishes` (чтобы ContentFlow получил результаты)
+3. Нажми **Execute workflow** и скопируй **Test URL** — он нужен только для отладки.
+   Для реальной работы после активации будет **Production URL** вида
+   `http://localhost:5678/webhook/contentflow`.
+4. Сохрани workflow, переключи тумблер **Active** в верхнем правом углу.
+
+Готовый минимальный workflow можно импортировать из
+[`docs/n8n-sample-workflow.json`](./docs/n8n-sample-workflow.json):
+**Workflows → Import from File**.
+
+### 3. Подключаем n8n в ContentFlow
 
 - Открой **⌘K → Настройки → n8n webhook**
-- Вставь URL, при желании добавь Shared Secret (он прилетит в заголовке `X-ContentFlow-Secret`)
-- Включи галку **«Авто-публикация при переводе карточки в Готово»**, если хочешь автоматизм
-- Нажми **«Тест: отправить ping»** — в n8n в Executions должен появиться тестовый запрос
+- Вставь URL (`http://localhost:5678/webhook/contentflow`)
+- При желании добавь **Shared secret** — он прилетит в n8n в заголовке
+  `X-ContentFlow-Secret`. В n8n прямо в ноде Webhook включи **Authentication → Header Auth**
+  и сверяй этот заголовок.
+- Включи галку **«Авто-публикация при переводе карточки в Готово»** — теперь
+  любая карточка, перетащенная в колонку «📤 Готово», автоматически уйдёт в n8n.
+- Нажми **«Тест: отправить ping»** — в n8n в Executions должен появиться запрос.
 
-### 3. Формат payload, который получит n8n
+### 4. Формат payload, который получит n8n
 
 ```json
 {
@@ -227,6 +286,50 @@ hashtags / meta.
 Если `N8N_WEBHOOK_URL` не задан и в UI пусто — `/api/publish` вернёт **demo envelope**
 без реальной отправки. Удобно, чтобы посмотреть формат.
 
+### 6. Рецепты публикации на каждую соцсеть
+
+Внутри n8n после Webhook-ноды обычно идёт **Switch** (или If) по `envelope[i].platform`,
+и дальше отдельная ветка на каждую площадку. Ниже — быстрые ориентиры.
+
+#### Instagram (Reels / Feed)
+- Нужен бизнес/креатор-аккаунт Instagram, привязанный к Facebook Page
+- Получить токен Meta Graph API: https://developers.facebook.com/docs/instagram-api
+- В n8n можно использовать ноду **HTTP Request** с вызовами Graph API:
+  1. `POST /{ig-user-id}/media` (создать media container с `video_url` / `image_url` + `caption`)
+  2. Подождать `status_code === FINISHED` (Polling)
+  3. `POST /{ig-user-id}/media_publish` с `creation_id`
+- Для caption используй `envelope.caption` + `envelope.hashtags.join(" ")`
+
+#### YouTube (Shorts / видео)
+- Включить YouTube Data API v3 в Google Cloud Console
+- В n8n есть встроенная нода **YouTube** → OAuth2 credential
+- Операция **Video → Upload**: `title` = первые 100 символов `caption`,
+  `description` = `envelope.body`, `tags` = `envelope.hashtags`
+
+#### ВКонтакте (VK)
+- Получить VK access token: https://dev.vk.com/api/access-token
+- В n8n используй **HTTP Request** к `https://api.vk.com/method/wall.post`
+  с параметрами `owner_id`, `message = envelope.body`, `v = 5.199`
+
+#### Threads (Meta)
+- Threads API (Meta): https://developers.facebook.com/docs/threads
+- Через **HTTP Request** на `POST /{threads-user-id}/threads` → ждать → `POST /media_publish`
+- Лимит 500 символов — мы уже обрезаем `envelope.caption` под этот размер
+
+После публикации рекомендуется собрать URL в `results[i].url` и вернуть в ответе — этот
+URL пойдёт в карточку ContentFlow как `post_url` и отобразится как кликабельный бейдж.
+
+### 7. Troubleshooting
+
+- **n8n не получает запрос** → проверь, что workflow **Active**, а не в режиме Test.
+  Test URL ловит только при нажатии «Execute workflow».
+- **CORS / mixed content** → если n8n на https, а ContentFlow локально на http —
+  браузер ничего не сломает (мы вызываем /api/publish на сервере), но n8n должен
+  принять запрос. Обычно проблем нет.
+- **Auth** → Shared secret не обязателен, но если включил — в n8n добавь Authentication → Header Auth.
+- **Demo envelope вместо реального** → `/api/publish` падает в демо, если ни в env,
+  ни в настройках нет URL. Проверь оба источника.
+
 ---
 
 ## 🗃 Supabase (опционально)
@@ -262,13 +365,14 @@ API-роуты `/api/cards` и `/api/cards/[id]` автоматически по
 ## 🏗 Архитектура
 
 ```
-User UI (Kanban, CardPanel, AIChatPanel, CommandPalette, SettingsModal)
+User UI (Kanban, CardPanel, AIChatPanel, CommandPalette, SettingsModal, SourceBlock)
         │
         ├── Zustand store ── localStorage ── cards / threads / settings
         │
         ├─> /api/ai/chat     → OpenAI SDK → { OpenAI | Ollama /v1 | LM Studio /v1 }
-        │                       (резолвер lib/ai-providers.ts)
+        │                       (резолвер lib/ai-providers.ts, persona из prompts.ts)
         ├─> /api/ai/models   → /v1/models (OpenAI-compat) или /api/tags (Ollama)
+        ├─> /api/fetch-url   → парсит OG-теги + текст источника (ссылки)
         ├─> /api/publish     → n8n webhook (per-platform adapters)
         └─> /api/cards*      → Supabase (если задан) или in-memory
 ```
@@ -285,11 +389,12 @@ contentflow/
 │     ├─ cards/[id]/route.ts            # PATCH/DELETE
 │     ├─ ai/chat/route.ts               # стриминг AI
 │     ├─ ai/models/route.ts             # список моделей провайдера
+│     ├─ fetch-url/route.ts             # скрейп источника по URL
 │     └─ publish/route.ts               # n8n webhook
 ├─ components/
 │  ├─ layout/ (Sidebar, Topbar, CommandPalette)
 │  ├─ kanban/ (KanbanBoard, KanbanColumn, ContentCardItem)
-│  ├─ card-panel/ (CardPanel, ScriptEditor, PublishBar)
+│  ├─ card-panel/ (CardPanel, ScriptEditor, PublishBar, SourceBlock)
 │  ├─ ai/ (AIChatPanel)
 │  └─ settings/ (SettingsModal)
 ├─ hooks/
@@ -298,12 +403,15 @@ contentflow/
 ├─ lib/
 │  ├─ store.ts                          # Zustand + persist + migrate
 │  ├─ ai-providers.ts                   # резолвер OpenAI/Ollama/LM Studio
+│  ├─ prompts.ts                        # системный промпт + persona + чипы
+│  ├─ url-importer.ts                   # HTML parser + snapshot для LLM
+│  ├─ import-client.ts                  # клиентские хелперы импорта
 │  ├─ publish-adapters.ts               # per-platform payload builder
 │  ├─ publish-client.ts                 # публикация + тосты
 │  ├─ supabase.ts
-│  ├─ prompts.ts
 │  ├─ seed.ts
 │  └─ utils.ts
+├─ docs/n8n-sample-workflow.json        # готовый workflow для импорта
 ├─ supabase/schema.sql
 ├─ types/content.ts
 └─ .env.example

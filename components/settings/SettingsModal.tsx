@@ -19,6 +19,7 @@ import {
   PROVIDER_LABELS,
   type AIProvider,
 } from "@/lib/ai-providers";
+import { PERSONAS, type Persona } from "@/lib/prompts";
 
 interface Props {
   open: boolean;
@@ -316,6 +317,37 @@ export function SettingsModal({ open, onClose }: Props) {
                 </a>
               </ProviderHint>
             )}
+
+            <div className="mt-3 grid gap-2 rounded-lg border border-border/60 bg-muted/20 p-3">
+              <div className="flex items-center gap-2">
+                <Sparkles size={12} className="text-violet-300" />
+                <span className="text-xs font-medium">
+                  Persona (стиль ответов AI)
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-1.5 md:grid-cols-3">
+                {PERSONAS.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() =>
+                      setLocal({ ...local, ai_persona: p.id as Persona })
+                    }
+                    className={cn(
+                      "flex flex-col items-start gap-0.5 rounded-md border p-2 text-left text-[11px] transition-colors",
+                      local.ai_persona === p.id
+                        ? "border-ring bg-accent/20"
+                        : "border-border bg-background/60 hover:border-ring/60"
+                    )}
+                    title={p.hint}
+                  >
+                    <span className="text-xs font-medium">{p.label}</span>
+                    <span className="text-[10px] text-muted-foreground line-clamp-2">
+                      {p.hint}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
           </Section>
 
           {/* n8n */}
