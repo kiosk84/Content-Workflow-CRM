@@ -9,19 +9,26 @@ import type {
 } from "@/types/content";
 import { SEED_CARDS } from "./seed";
 import { uid } from "./utils";
+import { PROVIDER_DEFAULTS, type AIProvider } from "./ai-providers";
 
 export interface Settings {
   n8n_webhook_url: string;
   n8n_secret: string;
-  openai_model: string;
   auto_publish_on_ready: boolean;
+  ai_provider: AIProvider;
+  ai_base_url: string;
+  ai_model: string;
+  ai_api_key: string;
 }
 
 const DEFAULT_SETTINGS: Settings = {
   n8n_webhook_url: "",
   n8n_secret: "",
-  openai_model: "gpt-4o-mini",
   auto_publish_on_ready: false,
+  ai_provider: "openai",
+  ai_base_url: "",
+  ai_model: PROVIDER_DEFAULTS.openai.model,
+  ai_api_key: "",
 };
 
 interface State {
@@ -163,12 +170,31 @@ export const useStore = create<State & Actions>()(
     }),
     {
       name: "contentflow-store",
+      version: 2,
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
         cards: state.cards,
         aiThreads: state.aiThreads,
         settings: state.settings,
       }),
+      migrate: (persisted, version) => {
+        const p = (persisted ?? {}) as Record<string, unknown>;
+        if (version < 2) {
+          const s = (p.settings ?? {}) as Record<string, unknown>;
+          const openai_model =
+            typeof s.openai_model === "string" ? s.openai_model : undefined;
+          p.settings = {
+            ...DEFAULT_SETTINGS,
+            ...s,
+            ai_provider: (s.ai_provider as AIProvider) ?? "openai",
+            ai_model:
+              (s.ai_model as string) ??
+              openai_model ??
+              DEFAULT_SETTINGS.ai_model,
+          };
+        }
+        return p as unknown as State & Actions;
+      },
       onRehydrateStorage: () => (state) => {
         state?.markHydrated();
       },

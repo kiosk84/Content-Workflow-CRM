@@ -23,6 +23,7 @@ export function AIChatPanel({ card, onApplyToScript }: Props) {
   const appendMsg = useStore((s) => s.appendAIMessage);
   const updateLast = useStore((s) => s.updateLastAIMessage);
   const clearThread = useStore((s) => s.clearAIThread);
+  const settings = useStore((s) => s.settings);
 
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
@@ -71,6 +72,12 @@ export function AIChatPanel({ card, onApplyToScript }: Props) {
             script_text: card.script_text,
             platform: card.platform,
           },
+          settings: {
+            ai_provider: settings.ai_provider,
+            ai_base_url: settings.ai_base_url,
+            ai_model: settings.ai_model,
+            ai_api_key: settings.ai_api_key,
+          },
         }),
       });
       if (!res.ok || !res.body) {
@@ -105,7 +112,7 @@ export function AIChatPanel({ card, onApplyToScript }: Props) {
         <div className="leading-tight">
           <div className="text-sm font-medium">AI ассистент</div>
           <div className="text-[10px] text-muted-foreground">
-            Видит контекст карточки
+            {providerLabel(settings.ai_provider)} · {settings.ai_model || "не задана"}
           </div>
         </div>
         <button
@@ -248,4 +255,10 @@ function MessageBubble({
       )}
     </div>
   );
+}
+
+function providerLabel(p: string) {
+  if (p === "ollama") return "Ollama";
+  if (p === "lmstudio") return "LM Studio";
+  return "OpenAI";
 }
