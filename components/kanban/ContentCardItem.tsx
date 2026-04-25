@@ -2,8 +2,8 @@
 
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Calendar } from "lucide-react";
-import type { ContentCard } from "@/types/content";
+import { Calendar, CheckCircle2, Clock3, AlertTriangle } from "lucide-react";
+import type { ContentCard, Platform, PublishStatus } from "@/types/content";
 import { PLATFORMS, PRIORITIES } from "@/types/content";
 import { useStore } from "@/lib/store";
 import { cn, formatDate, relativeTime } from "@/lib/utils";
@@ -30,16 +30,23 @@ export function ContentCardItem({ card }: { card: ContentCard }) {
   const preview =
     stripHtml(card.idea_text).slice(0, 140) ||
     stripHtml(card.script_text).slice(0, 140);
+  const primaryColor = card.platform[0]
+    ? PLATFORMS.find((p) => p.id === card.platform[0])?.color
+    : undefined;
 
   return (
     <div
       ref={setNodeRef}
-      style={style}
+      style={{
+        ...style,
+        borderLeftColor: primaryColor ?? "transparent",
+      }}
       {...attributes}
       {...listeners}
       onClick={() => setActiveCard(card.id)}
       className={cn(
-        "group relative cursor-grab active:cursor-grabbing select-none rounded-lg border border-border bg-card p-3 text-sm shadow-card transition-colors hover:bg-card-hover",
+        "group relative cursor-grab active:cursor-grabbing select-none rounded-lg border border-border border-l-[3px] bg-card p-3 text-sm shadow-card transition-all",
+        "hover:bg-card-hover hover:border-ring/60 hover:shadow-[0_6px_24px_-12px_rgba(0,0,0,0.5)]",
         isDragging && "sortable-ghost"
       )}
     >
@@ -79,6 +86,17 @@ export function ContentCardItem({ card }: { card: ContentCard }) {
         </div>
       )}
 
+      {/* Publish status row */}
+      {card.platform.length > 0 && card.publish_status && (
+        <div className="mt-2 flex flex-wrap gap-1">
+          {card.platform.map((pid) => {
+            const status = card.publish_status?.[pid]?.status;
+            if (!status || status === "idle") return null;
+            return <PublishDot key={pid} platform={pid} status={status} />;
+          })}
+        </div>
+      )}
+
       <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
         {card.tags.slice(0, 3).map((t) => (
           <span key={t} className="chip">
@@ -94,5 +112,39 @@ export function ContentCardItem({ card }: { card: ContentCard }) {
         <span className="ml-auto text-[10px]">{relativeTime(card.updated_at)}</span>
       </div>
     </div>
+  );
+}
+
+function PublishDot({
+  platform,
+  status,
+}: {
+  platform: Platform;
+  status: PublishStatus;
+}) {
+  const meta = PLATFORMS.find((p) => p.id === platform)!;
+  const Icon =
+    status === "posted"
+      ? CheckCircle2
+      : status === "pending"
+        ? Clock3
+        : AlertTriangle;
+  const color =
+    status === "posted"
+      ? "text-emerald-400"
+      : status === "pending"
+        ? "text-amber-400"
+        : "text-rose-400";
+  return (
+    <span
+      className="inline-flex items-center gap-0.5 rounded-full border border-border bg-background/60 px-1.5 py-0.5 text-[10px]"
+      title={`${meta.label}: ${status}`}
+    >
+      <span
+        className="inline-block h-1.5 w-1.5 rounded-full"
+        style={{ background: meta.color }}
+      />
+      <Icon size={10} className={color} />
+    </span>
   );
 }

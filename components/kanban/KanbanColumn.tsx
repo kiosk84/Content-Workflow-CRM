@@ -25,16 +25,16 @@ export function KanbanColumn({
   const setActiveCard = useStore((s) => s.setActiveCard);
 
   return (
-    <div className="flex w-[300px] shrink-0 flex-col rounded-xl border border-border bg-background/40">
+    <div className="flex w-[300px] shrink-0 flex-col rounded-xl border border-border bg-background/30">
       <div
         className={cn(
-          "flex items-center gap-2 rounded-t-xl border-b border-border bg-gradient-to-b px-3 py-2.5",
+          "sticky top-0 z-10 flex items-center gap-2 rounded-t-xl border-b border-border bg-gradient-to-b px-3 py-2.5 backdrop-blur",
           meta.accent
         )}
       >
         <span className="text-base">{meta.icon}</span>
-        <div className="font-medium text-sm">{meta.title}</div>
-        <span className="ml-auto text-[11px] text-muted-foreground">
+        <div className="font-medium text-sm text-foreground">{meta.title}</div>
+        <span className="ml-auto rounded-full bg-background/60 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
           {cards.length}
         </span>
       </div>
@@ -56,10 +56,9 @@ export function KanbanColumn({
         </SortableContext>
 
         {cards.length === 0 && (
-          <div className="mt-2 rounded-lg border border-dashed border-border/80 p-4 text-center text-[12px] text-muted-foreground">
-            Пусто. Перетащи карточку сюда
-            <br />
-            или добавь новую.
+          <div className="mt-2 flex flex-col items-center gap-2 rounded-lg border border-dashed border-border/80 bg-background/20 p-5 text-center text-[12px] text-muted-foreground">
+            <span className="text-2xl opacity-60">{meta.icon}</span>
+            <span>Пусто. Перетащи сюда или добавь.</span>
           </div>
         )}
 
@@ -68,7 +67,7 @@ export function KanbanColumn({
             const c = createCard({ stage, title: "Новая идея" });
             setActiveCard(c.id);
           }}
-          className="mt-1 flex w-full items-center justify-center gap-1 rounded-md border border-dashed border-border py-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+          className="mt-1 flex w-full items-center justify-center gap-1 rounded-md border border-dashed border-border py-1.5 text-xs text-muted-foreground transition-colors hover:border-ring hover:bg-muted hover:text-foreground"
         >
           <Plus size={12} />
           Добавить

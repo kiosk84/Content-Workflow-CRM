@@ -21,8 +21,11 @@
 html,
 body {
   height: 100%;
-  background: hsl(var(--background));
   color: hsl(var(--foreground));
+  background:
+    radial-gradient(1200px 700px at 100% -10%, hsl(260 50% 18% / 0.35), transparent 60%),
+    radial-gradient(900px 600px at -10% 100%, hsl(300 50% 16% / 0.25), transparent 55%),
+    hsl(var(--background));
 }
 
 body {
@@ -122,6 +125,8 @@ body {
 .drag-over-column {
   box-shadow: 0 0 0 1px hsl(var(--ring)) inset;
 }
+
+
 
 @layer utilities {
   .text-balance {

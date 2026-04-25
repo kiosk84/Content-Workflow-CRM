@@ -7,10 +7,15 @@ import { useStore } from "@/lib/store";
 import { PLATFORMS, PRIORITIES, STAGES } from "@/types/content";
 import type { Platform, Priority, Stage } from "@/types/content";
 import { ScriptEditor } from "./ScriptEditor";
+import { PublishBar } from "./PublishBar";
 import { AIChatPanel } from "@/components/ai/AIChatPanel";
 import { cn, relativeTime } from "@/lib/utils";
 
-export function CardPanel() {
+interface CardPanelProps {
+  onOpenSettings?: () => void;
+}
+
+export function CardPanel({ onOpenSettings }: CardPanelProps = {}) {
   const activeCardId = useStore((s) => s.activeCardId);
   const setActiveCard = useStore((s) => s.setActiveCard);
   const cards = useStore((s) => s.cards);
@@ -221,6 +226,11 @@ export function CardPanel() {
                 tags={local.tags}
                 onChange={(tags) => setLocal({ ...local, tags })}
               />
+            </div>
+
+            {/* Publish bar */}
+            <div className="mt-4 px-5">
+              <PublishBar card={card} onOpenSettings={onOpenSettings} />
             </div>
 
             {/* Tabs */}

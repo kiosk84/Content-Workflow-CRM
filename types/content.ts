@@ -10,6 +10,15 @@ export type Stage =
 
 export type Priority = "low" | "medium" | "high";
 
+export type PublishStatus = "idle" | "pending" | "posted" | "failed";
+
+export interface PublishRecord {
+  status: PublishStatus;
+  posted_at?: string;
+  post_url?: string;
+  error?: string;
+}
+
 export interface ContentCard {
   id: string;
   title: string;
@@ -21,6 +30,7 @@ export interface ContentCard {
   deadline: string | null;
   tags: string[];
   attachments: Attachment[];
+  publish_status?: Partial<Record<Platform, PublishRecord>>;
   created_at: string;
   updated_at: string;
 }
