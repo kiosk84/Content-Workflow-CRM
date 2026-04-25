@@ -12,9 +12,16 @@ const EMPTY_THREAD: AIMessage[] = [];
 interface Props {
   card: ContentCard;
   onApplyToScript: (text: string, mode?: "append" | "replace") => void;
+  pendingPrompt?: string | null;
+  onPendingHandled?: () => void;
 }
 
-export function AIChatPanel({ card, onApplyToScript }: Props) {
+export function AIChatPanel({
+  card,
+  onApplyToScript,
+  pendingPrompt,
+  onPendingHandled,
+}: Props) {
   const threads = useStore((s) => s.aiThreads);
   const thread = useMemo(
     () => threads[card.id] ?? EMPTY_THREAD,
@@ -23,6 +30,7 @@ export function AIChatPanel({ card, onApplyToScript }: Props) {
   const appendMsg = useStore((s) => s.appendAIMessage);
   const updateLast = useStore((s) => s.updateLastAIMessage);
   const clearThread = useStore((s) => s.clearAIThread);
+  const settings = useStore((s) => s.settings);
 
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
@@ -34,6 +42,19 @@ export function AIChatPanel({ card, onApplyToScript }: Props) {
       behavior: "smooth",
     });
   }, [thread.length, streaming]);
+
+  const pendingRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (pendingPrompt && pendingPrompt !== pendingRef.current && !streaming) {
+      pendingRef.current = pendingPrompt;
+      // Fire on next tick so initial render mounts.
+      void Promise.resolve().then(() => {
+        send(pendingPrompt);
+        onPendingHandled?.();
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingPrompt, streaming]);
 
   const send = async (contentOverride?: string) => {
     const prompt = (contentOverride ?? input).trim();
@@ -70,6 +91,14 @@ export function AIChatPanel({ card, onApplyToScript }: Props) {
             idea_text: card.idea_text,
             script_text: card.script_text,
             platform: card.platform,
+            source_snapshot: card.source_snapshot,
+          },
+          settings: {
+            ai_provider: settings.ai_provider,
+            ai_base_url: settings.ai_base_url,
+            ai_model: settings.ai_model,
+            ai_api_key: settings.ai_api_key,
+            ai_persona: settings.ai_persona,
           },
         }),
       });
@@ -105,7 +134,7 @@ export function AIChatPanel({ card, onApplyToScript }: Props) {
         <div className="leading-tight">
           <div className="text-sm font-medium">AI ассистент</div>
           <div className="text-[10px] text-muted-foreground">
-            Видит контекст карточки
+            {providerLabel(settings.ai_provider)} · {settings.ai_model || "не задана"} · {personaLabel(settings.ai_persona)}
           </div>
         </div>
         <button
@@ -248,4 +277,25 @@ function MessageBubble({
       )}
     </div>
   );
+}
+
+function providerLabel(p: string) {
+  if (p === "ollama") return "Ollama";
+  if (p === "lmstudio") return "LM Studio";
+  return "OpenAI";
+}
+
+function personaLabel(p: string) {
+  switch (p) {
+    case "marketer":
+      return "маркетолог";
+    case "seo":
+      return "SEO";
+    case "scriptwriter":
+      return "сценарист";
+    case "producer":
+      return "продюсер";
+    default:
+      return "универсал";
+  }
 }

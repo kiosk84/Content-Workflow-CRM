@@ -1,6 +1,12 @@
 import { NextRequest } from "next/server";
 import OpenAI from "openai";
-import { buildSystemPrompt } from "@/lib/prompts";
+import { buildSystemPrompt, type Persona } from "@/lib/prompts";
+import type { SourceSnapshot } from "@/types/content";
+import {
+  resolveProvider,
+  type AIProvider,
+  type ProviderSettings,
+} from "@/lib/ai-providers";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,65 +18,98 @@ interface ChatPayload {
     idea_text: string;
     script_text: string;
     platform: string[];
+    source_snapshot?: SourceSnapshot;
   };
+  settings?: Partial<ProviderSettings> & { ai_persona?: Persona };
 }
 
 export async function POST(req: NextRequest) {
   const body = (await req.json()) as ChatPayload;
-  const apiKey = process.env.OPENAI_API_KEY;
-  const model = process.env.OPENAI_MODEL ?? "gpt-4o-mini";
 
-  const system = buildSystemPrompt({
-    title: body.card.title,
-    idea_text: body.card.idea_text,
-    script_text: body.card.script_text,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    platform: body.card.platform as any,
-  });
+  const system = buildSystemPrompt(
+    {
+      title: body.card.title,
+      idea_text: body.card.idea_text,
+      script_text: body.card.script_text,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      platform: body.card.platform as any,
+      source_snapshot: body.card.source_snapshot,
+    },
+    body.settings?.ai_persona ?? "universal"
+  );
 
-  if (!apiKey) {
-    // Demo mode — return a deterministic mock stream so the UI works.
-    return streamPlain(mockAnswer(body));
+  const resolved = resolveProvider(body.settings);
+
+  // OpenAI cloud without a key → demo mock stream.
+  if (resolved.provider === "openai" && !resolved.apiKey) {
+    return streamPlain(mockAnswer(body, "demo"));
+  }
+  // Local providers with no base URL somehow → guard.
+  if (resolved.provider !== "openai" && !resolved.baseURL) {
+    return streamPlain(
+      `[${resolved.provider}] base URL не задан. Проверь настройки.`
+    );
   }
 
-  const client = new OpenAI({ apiKey });
-  const completion = await client.chat.completions.create({
-    model,
-    stream: true,
-    temperature: 0.7,
-    messages: [
-      { role: "system", content: system },
-      ...body.messages.map((m) => ({ role: m.role, content: m.content })),
-    ],
+  const client = new OpenAI({
+    apiKey: resolved.apiKey || "local-no-auth",
+    baseURL: resolved.baseURL,
   });
 
-  const encoder = new TextEncoder();
-  const stream = new ReadableStream({
-    async start(controller) {
-      try {
-        for await (const chunk of completion) {
-          const delta = chunk.choices?.[0]?.delta?.content ?? "";
-          if (delta) controller.enqueue(encoder.encode(delta));
+  try {
+    const completion = await client.chat.completions.create({
+      model: resolved.model,
+      stream: true,
+      temperature: 0.7,
+      messages: [
+        { role: "system", content: system },
+        ...body.messages.map((m) => ({ role: m.role, content: m.content })),
+      ],
+    });
+
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      async start(controller) {
+        try {
+          for await (const chunk of completion) {
+            const delta = chunk.choices?.[0]?.delta?.content ?? "";
+            if (delta) controller.enqueue(encoder.encode(delta));
+          }
+        } catch (err) {
+          controller.enqueue(
+            encoder.encode(
+              `\n\n[Ошибка ${resolved.provider}: ${err instanceof Error ? err.message : "unknown"}]`
+            )
+          );
+        } finally {
+          controller.close();
         }
-      } catch (err) {
-        controller.enqueue(
-          encoder.encode(
-            `\n\n[Ошибка OpenAI: ${err instanceof Error ? err.message : "unknown"}]`
-          )
-        );
-      } finally {
-        controller.close();
-      }
-    },
-  });
+      },
+    });
 
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "text/plain; charset=utf-8",
-      "Cache-Control": "no-cache, no-transform",
-      "X-Accel-Buffering": "no",
-    },
-  });
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "no-cache, no-transform",
+        "X-Accel-Buffering": "no",
+        "X-AI-Provider": resolved.provider,
+        "X-AI-Model": resolved.model,
+      },
+    });
+  } catch (err) {
+    return streamPlain(
+      `[${resolved.provider}: ${resolved.model}] не удалось подключиться: ${err instanceof Error ? err.message : "unknown"}. ` +
+        `\n\nПроверь, что сервис запущен (${baseHint(resolved.provider)}) и модель доступна.`
+    );
+  }
+}
+
+function baseHint(p: AIProvider) {
+  if (p === "ollama")
+    return "ollama запущен: `ollama serve` + `ollama pull <model>`";
+  if (p === "lmstudio")
+    return "в LM Studio включи Local Server (Developer → Start Server)";
+  return "OPENAI_API_KEY задан";
 }
 
 function chunkString(text: string, size: number): string[] {
@@ -102,7 +141,7 @@ function streamPlain(text: string) {
   });
 }
 
-function mockAnswer(body: ChatPayload): string {
+function mockAnswer(body: ChatPayload, mode: "demo" | "error" = "demo"): string {
   const last = body.messages[body.messages.length - 1]?.content ?? "";
   const title = body.card.title || "без названия";
   const platforms = body.card.platform?.length
@@ -150,7 +189,9 @@ function mockAnswer(body: ChatPayload): string {
   }
 
   return [
-    `(демо-режим — задай OPENAI_API_KEY в .env.local)`,
+    mode === "demo"
+      ? `(демо-режим — задай провайдер в Настройках или OPENAI_API_KEY в .env.local)`
+      : `(fallback-ответ)`,
     "",
     `По карточке «${title}» (${platforms}):`,
     "",

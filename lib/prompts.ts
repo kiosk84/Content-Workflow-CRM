@@ -1,4 +1,40 @@
-import type { ContentCard } from "@/types/content";
+import type { ContentCard, SourceSnapshot } from "@/types/content";
+import { snapshotForPrompt } from "./url-importer";
+
+export type Persona =
+  | "universal"
+  | "marketer"
+  | "seo"
+  | "scriptwriter"
+  | "producer";
+
+export const PERSONAS: { id: Persona; label: string; hint: string }[] = [
+  {
+    id: "universal",
+    label: "Универсальный",
+    hint: "Баланс между идеями, сценарием и маркетингом.",
+  },
+  {
+    id: "marketer",
+    label: "Маркетолог",
+    hint: "Воронки, боли ЦА, офферы, CTA, аналитика.",
+  },
+  {
+    id: "seo",
+    label: "SEO-редактор",
+    hint: "Ключи, заголовки, описания, хештеги, кликабельность.",
+  },
+  {
+    id: "scriptwriter",
+    label: "Сценарист",
+    hint: "Структура, драматургия, хуки, монтажные блоки.",
+  },
+  {
+    id: "producer",
+    label: "Продюсер",
+    hint: "План контента, календарь, серии, кросспостинг.",
+  },
+];
 
 export const QUICK_PROMPTS: { label: string; prompt: string; icon: string }[] = [
   {
@@ -31,20 +67,105 @@ export const QUICK_PROMPTS: { label: string; prompt: string; icon: string }[] = 
       "Сократи и упрости текущий сценарий/идею. Убери воду, оставь самое важное, сохрани эмоциональный крючок.",
     icon: "✂️",
   },
+  {
+    label: "SEO-заголовок + описание",
+    prompt:
+      "Дай 5 SEO-заголовков (до 60 символов) и 3 варианта описания (до 160 символов) с ключами и кликабельными формулировками. Укажи, под какие запросы оптимизированы.",
+    icon: "🔍",
+  },
+  {
+    label: "Топ-20 хештегов",
+    prompt:
+      "Подбери топ-20 хештегов под платформы карточки: смешай широкие/средние/нишевые. Разбей на группы по охвату и поясни стратегию.",
+    icon: "#️⃣",
+  },
+  {
+    label: "Рекомендуй платформы",
+    prompt:
+      "На основе идеи предложи оптимальный набор платформ и форматов (Short/Reel/Post/Carousel), аргументируя каждую рекомендацию через алгоритм площадки и целевую аудиторию.",
+    icon: "📡",
+  },
+  {
+    label: "3 варианта CTA",
+    prompt:
+      "Сгенерируй 3 варианта призыва к действию: жёсткий/мягкий/вовлекающий. Учитывай стадию воронки и особенности площадки.",
+    icon: "📣",
+  },
+  {
+    label: "Анализ хука",
+    prompt:
+      "Оцени текущий хук/первое предложение в сценарии по 5 критериям: конкретика, конфликт, цифра, обещание, эмоция. Поставь оценки 0-10 и дай один улучшенный вариант.",
+    icon: "🧪",
+  },
+  {
+    label: "Ремикс из источника",
+    prompt:
+      "Используя ИСТОЧНИК в контексте, сделай полноценный ремикс: новый заголовок, хук, структура сценария и финальный текст — под платформы карточки и мою целевую аудиторию. Не копируй дословно.",
+    icon: "♻️",
+  },
 ];
 
-export function buildSystemPrompt(card: Pick<ContentCard, "title" | "idea_text" | "script_text" | "platform">) {
-  return `Ты — AI-ассистент контент-мейкера в приложении ContentFlow.
-Ты помогаешь с идеями, структурой сценариев и адаптацией контента под платформы.
-Говори кратко, по-русски, дружелюбно, по делу. Используй простые списки и заголовки.
+const PLATFORM_PLAYBOOK: Record<string, string> = {
+  youtube:
+    "YouTube ранжирует по retention (удержание) и CTR превью. В Shorts критичны первые 1.5 секунды и цикл просмотра. В длинных видео — заголовок+превью+структура, чапторы помогают.",
+  instagram:
+    "Instagram тянет саженс (saves) и отправки (shares) сильнее лайков. Reels — вертикаль, хук за 1 сек, аудиотренды помогают. Карусели держат дольше, чем одиночные фото.",
+  threads:
+    "Threads = микроблог-дискурс. Лучше работают короткие тезисы, цепочки (threads), реплики в чужих обсуждениях. Персональный тон, без кликбейта.",
+  vk:
+    "ВКонтакте VK Clips/Shorts растут, длинные посты с подзаголовками и списками уверенно читают. Важны сохранения и репосты, а не лайки.",
+};
+
+function personaPreamble(p: Persona): string {
+  switch (p) {
+    case "marketer":
+      return "Ты — сильный SMM-маркетолог и performance-специалист. Думай в категориях ЦА, болей, оффера, воронки (TOFU/MOFU/BOFU), CTA и метрик. Не стесняйся предлагать A/B варианты.";
+    case "seo":
+      return "Ты — SEO-редактор с опытом в YouTube/Instagram SEO. Думай в ключах, поисковом интенте, кликабельных заголовках, описаниях и хештегах. Всегда проясняй, под какие запросы оптимизируешь.";
+    case "scriptwriter":
+      return "Ты — сценарист коротких и средних форм для соцсетей. Мысли блоками: Хук → Проблема → Развитие → Пик → CTA. Давай визуальные ремарки и тайминги.";
+    case "producer":
+      return "Ты — продюсер контент-плана. Мысли неделями/месяцами, сериями, кросс-постингом и повторным использованием материала (repurposing). Предлагай календарь.";
+    default:
+      return "Ты — универсальный AI-ассистент контент-мейкера: немного маркетолог, немного сценарист, немного SEO-редактор.";
+  }
+}
+
+function platformGuidance(platforms: string[]): string {
+  const entries = platforms.map((p) => PLATFORM_PLAYBOOK[p]).filter(Boolean);
+  if (entries.length === 0) return "";
+  return `\n\nАлгоритмы выбранных платформ (учитывай при советах):\n${entries
+    .map((e) => `• ${e}`)
+    .join("\n")}`;
+}
+
+export function buildSystemPrompt(
+  card: Pick<
+    ContentCard,
+    "title" | "idea_text" | "script_text" | "platform"
+  > & { source_snapshot?: SourceSnapshot },
+  persona: Persona = "universal"
+) {
+  const platformsList = card.platform?.length
+    ? card.platform.join(", ")
+    : "не выбраны";
+
+  const sourceBlock = card.source_snapshot
+    ? `\n\n${snapshotForPrompt(card.source_snapshot)}`
+    : "";
+
+  return `${personaPreamble(persona)}
+
+Ты работаешь в приложении ContentFlow — CRM для контент-мейкеров.
+Говори по-русски, кратко, дружелюбно, по делу. Используй простые списки и заголовки.
+Когда пользователь просит «применить к сценарию» — выдавай чистый финальный текст без вступлений.
+Если в контексте есть ИСТОЧНИК — опирайся на него, но не копируй дословно; переработай в оригинальный контент под автора.
 
 Контекст текущей карточки:
 Заголовок: "${card.title || "—"}"
 Идея: "${card.idea_text || "—"}"
-Платформы: ${card.platform?.length ? card.platform.join(", ") : "не выбраны"}
-Текущий сценарий: ${card.script_text ? stripHtml(card.script_text).slice(0, 1200) : "пусто"}
-
-Если пользователь просит «применить к сценарию» — выдавай финальный чистый текст без вступлений.`;
+Платформы: ${platformsList}
+Текущий сценарий: ${card.script_text ? stripHtml(card.script_text).slice(0, 1200) : "пусто"}${platformGuidance(card.platform ?? [])}${sourceBlock}`;
 }
 
 export function stripHtml(html: string): string {

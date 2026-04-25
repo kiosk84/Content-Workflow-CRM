@@ -15,19 +15,31 @@ import { STAGES, type Stage } from "@/types/content";
 import { useStore } from "@/lib/store";
 import { KanbanColumn } from "./KanbanColumn";
 import { ContentCardItem } from "./ContentCardItem";
+import { stripHtml } from "@/lib/prompts";
 
 export function KanbanBoard() {
   const cards = useStore((s) => s.cards);
   const platformFilter = useStore((s) => s.platformFilter);
+  const search = useStore((s) => s.search);
   const moveCard = useStore((s) => s.moveCard);
 
-  const filtered = useMemo(
-    () =>
-      platformFilter === "all"
-        ? cards
-        : cards.filter((c) => c.platform.includes(platformFilter)),
-    [cards, platformFilter]
-  );
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return cards.filter((c) => {
+      if (platformFilter !== "all" && !c.platform.includes(platformFilter))
+        return false;
+      if (!q) return true;
+      const hay = [
+        c.title,
+        c.idea_text,
+        stripHtml(c.script_text || ""),
+        c.tags.join(" "),
+      ]
+        .join(" ")
+        .toLowerCase();
+      return hay.includes(q);
+    });
+  }, [cards, platformFilter, search]);
 
   const byStage = useMemo(() => {
     const map = new Map<Stage, typeof cards>();

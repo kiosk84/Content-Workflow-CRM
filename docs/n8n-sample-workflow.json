@@ -1,0 +1,130 @@
+{
+  "name": "ContentFlow — publish dispatcher (sample)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "contentflow",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "webhook-contentflow",
+      "name": "Webhook (ContentFlow)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "contentflow"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Receives the full ContentFlow payload and turns each envelope entry\n// into its own n8n item so downstream Switch can route per-platform.\nconst items = [];\nfor (const [idx, env] of ($json.envelope ?? []).entries()) {\n  items.push({\n    json: {\n      run_id: $json.run_id,\n      card_id: $json.card?.id,\n      card_title: $json.card?.title,\n      platform: env.platform,\n      caption: env.caption,\n      body: env.body,\n      hashtags: env.hashtags,\n      format: env.format,\n      limits: env.limits,\n      meta: env.meta,\n      index: idx\n    }\n  });\n}\nreturn items;"
+      },
+      "id": "explode-envelope",
+      "name": "Explode envelope[]",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ $json.platform }}",
+        "rules": {
+          "rules": [
+            { "operation": "equal", "value2": "instagram", "output": 0 },
+            { "operation": "equal", "value2": "youtube", "output": 1 },
+            { "operation": "equal", "value2": "threads", "output": 2 },
+            { "operation": "equal", "value2": "vk", "output": 3 }
+          ]
+        }
+      },
+      "id": "switch-platform",
+      "name": "Switch (platform)",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 1,
+      "position": [720, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// TODO: replace with a real Instagram Graph API call.\n// Here we just pass the payload through so ContentFlow sees it as 'posted'.\nreturn [{ json: { platform: 'instagram', url: 'https://instagram.com/stub/' + $json.run_id } }];"
+      },
+      "id": "stub-instagram",
+      "name": "Stub → Instagram",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [960, 160]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { platform: 'youtube', url: 'https://youtu.be/stub-' + $json.run_id } }];"
+      },
+      "id": "stub-youtube",
+      "name": "Stub → YouTube",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [960, 260]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { platform: 'threads', url: 'https://threads.net/stub/' + $json.run_id } }];"
+      },
+      "id": "stub-threads",
+      "name": "Stub → Threads",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [960, 360]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { platform: 'vk', url: 'https://vk.com/wall-stub?' + $json.run_id } }];"
+      },
+      "id": "stub-vk",
+      "name": "Stub → VK",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [960, 460]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Aggregate per-platform results into the response shape ContentFlow expects.\nconst all = $items().map(i => i.json);\nreturn [{ json: { ok: true, results: all } }];"
+      },
+      "id": "aggregate-results",
+      "name": "Aggregate → { ok, results[] }",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1220, 300]
+    }
+  ],
+  "connections": {
+    "Webhook (ContentFlow)": {
+      "main": [[{ "node": "Explode envelope[]", "type": "main", "index": 0 }]]
+    },
+    "Explode envelope[]": {
+      "main": [[{ "node": "Switch (platform)", "type": "main", "index": 0 }]]
+    },
+    "Switch (platform)": {
+      "main": [
+        [{ "node": "Stub → Instagram", "type": "main", "index": 0 }],
+        [{ "node": "Stub → YouTube", "type": "main", "index": 0 }],
+        [{ "node": "Stub → Threads", "type": "main", "index": 0 }],
+        [{ "node": "Stub → VK", "type": "main", "index": 0 }]
+      ]
+    },
+    "Stub → Instagram": {
+      "main": [[{ "node": "Aggregate → { ok, results[] }", "type": "main", "index": 0 }]]
+    },
+    "Stub → YouTube": {
+      "main": [[{ "node": "Aggregate → { ok, results[] }", "type": "main", "index": 0 }]]
+    },
+    "Stub → Threads": {
+      "main": [[{ "node": "Aggregate → { ok, results[] }", "type": "main", "index": 0 }]]
+    },
+    "Stub → VK": {
+      "main": [[{ "node": "Aggregate → { ok, results[] }", "type": "main", "index": 0 }]]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "description": "Minimal dispatcher: accepts ContentFlow webhook, fans out per-platform via Switch, aggregates results into { ok, results: [{ platform, url }] }. Replace stub Code nodes with real social API calls (Instagram Graph, YouTube Data API, Threads API, VK wall.post)."
+  }
+}
